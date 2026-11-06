@@ -12,11 +12,11 @@ jobs:
       - run: flutter pub add android_alarm_manager_plus:^5.1.2
       - run: flutter pub get
       - run: cp lib/main.dart /tmp/main.dart.bak
-- run: cp pubspec.yaml /tmp/pubspec.yaml.bak
-- run: flutter create --platforms=android --org com.lucky.hkcalendar --project-name hk_calendar .
-- run: cp /tmp/main.dart.bak lib/main.dart
-- run: cp /tmp/pubspec.yaml.bak pubspec.yaml
-- run: flutter pub get
+      - run: cp pubspec.yaml /tmp/pubspec.yaml.bak
+      - run: flutter create --platforms=android --org com.lucky.hkcalendar --project-name hk_calendar .
+      - run: cp /tmp/main.dart.bak lib/main.dart
+      - run: cp /tmp/pubspec.yaml.bak pubspec.yaml
+      - run: flutter pub get
       - run: flutter build apk --release
       - uses: actions/upload-artifact@v4
         with:
