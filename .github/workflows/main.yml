@@ -19,23 +19,30 @@ jobs:
       - run: flutter pub get
       - run: |
           python3 << 'PY'
-          import pathlib
+          import pathlib, re
           for name in ['android/app/build.gradle.kts', 'android/app/build.gradle']:
               p = pathlib.Path(name)
               if not p.exists():
                   continue
               t = p.read_text()
-              print('===', name)
-              print(t)
+              # 刪走之前放錯位嗰行
+              t = t.replace('isCoreLibraryDesugaringEnabled = true\n', '')
+              t = t.replace('isCoreLibraryDesugaringEnabled = true', '')
+              # 加返 compileOptions
               if 'isCoreLibraryDesugaringEnabled' not in t:
                   if 'compileOptions' in t:
-                      t = t.replace('compileOptions {', 'compileOptions {\n        isCoreLibraryDesugaringEnabled = true', 1)
+                      t = re.sub(r'compileOptions\s*\{', 'compileOptions {\n        isCoreLibraryDesugaringEnabled = true', t, count=1)
                   else:
-                      t = t.replace('android {', 'android {\n    compileOptions {\n        isCoreLibraryDesugaringEnabled = true\n    }', 1)
-              if 'coreLibraryDesugaring' not in t:
-                  t = t.replace('dependencies {', 'dependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")', 1)
+                      t = re.sub(r'android\s*\{', 'android {\n    compileOptions {\n        isCoreLibraryDesugaringEnabled = true\n    }', t, count=1)
+              # 強行加 dependency, 唔理 dependencies 有冇空格
+              if 'desugar_jdk_libs' not in t:
+                  t2 = re.sub(r'dependencies\s*\{', 'dependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")', t, count=1)
+                  if t2 == t:
+                      t = t + '\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")\n}\n'
+                  else:
+                      t = t2
               p.write_text(t)
-              print('--- AFTER ---')
+              print('===', name)
               print(p.read_text())
           PY
       - run: flutter build apk --release
