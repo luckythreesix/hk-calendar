@@ -20,13 +20,23 @@ jobs:
       - run: |
           python3 << 'PY'
           import pathlib
-          p = pathlib.Path('android/app/build.gradle.kts')
-          t = p.read_text()
-          t = t.replace('isMinifyEnabled = true', 'isMinifyEnabled = true\n        isCoreLibraryDesugaringEnabled = true')
-          if 'coreLibraryDesugaring' not in t:
-              t = t.replace('dependencies {', 'dependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")')
-          p.write_text(t)
-          print(p.read_text())
+          for name in ['android/app/build.gradle.kts', 'android/app/build.gradle']:
+              p = pathlib.Path(name)
+              if not p.exists():
+                  continue
+              t = p.read_text()
+              print('===', name)
+              print(t)
+              if 'isCoreLibraryDesugaringEnabled' not in t:
+                  if 'compileOptions' in t:
+                      t = t.replace('compileOptions {', 'compileOptions {\n        isCoreLibraryDesugaringEnabled = true', 1)
+                  else:
+                      t = t.replace('android {', 'android {\n    compileOptions {\n        isCoreLibraryDesugaringEnabled = true\n    }', 1)
+              if 'coreLibraryDesugaring' not in t:
+                  t = t.replace('dependencies {', 'dependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")', 1)
+              p.write_text(t)
+              print('--- AFTER ---')
+              print(p.read_text())
           PY
       - run: flutter build apk --release
       - uses: actions/upload-artifact@v4
