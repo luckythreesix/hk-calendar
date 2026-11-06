@@ -17,6 +17,17 @@ jobs:
       - run: cp /tmp/main.dart.bak lib/main.dart
       - run: cp /tmp/pubspec.yaml.bak pubspec.yaml
       - run: flutter pub get
+      - run: |
+          python3 << 'PY'
+          import pathlib
+          p = pathlib.Path('android/app/build.gradle.kts')
+          t = p.read_text()
+          t = t.replace('isMinifyEnabled = true', 'isMinifyEnabled = true\n        isCoreLibraryDesugaringEnabled = true')
+          if 'coreLibraryDesugaring' not in t:
+              t = t.replace('dependencies {', 'dependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")')
+          p.write_text(t)
+          print(p.read_text())
+          PY
       - run: flutter build apk --release
       - uses: actions/upload-artifact@v4
         with:
