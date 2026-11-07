@@ -16,7 +16,7 @@ dependencies:
   flutter_local_notifications: ^17.0.0
   android_alarm_manager_plus: ^5.0.3
   permission_handler: ^11.3.0
-  speech_to_text: ^6.6.0
+  speech_to_text: ^7.0.0
   quick_actions: ^1.0.0
 
 dev_dependencies:
