@@ -151,7 +151,10 @@ class _State extends State<CalendarPro> {
           calendarBuilders: CalendarBuilders(
             markerBuilder: (context, day, evs) {
               if (evs.isEmpty) return SizedBox.shrink();
-              return Column(children: evs.take(2).map((e) => Container(width: double.infinity, margin: EdgeInsets.only(top: 1), padding: EdgeInsets.symmetric(horizontal: 2, vertical: 1), decoration: BoxDecoration(color: Color(0xFF2A7CFF), borderRadius: BorderRadius.circular(4)), child: Text(e['title'].toString(), maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: TextStyle(fontSize: 8, color: Colors.white)))).toList());
+              return Column(children: evs.take(2).map((e) {
+                final m = e as Map;
+                return Container(width: double.infinity, margin: EdgeInsets.only(top: 1), padding: EdgeInsets.symmetric(horizontal: 2, vertical: 1), decoration: BoxDecoration(color: Color(0xFF2A7CFF), borderRadius: BorderRadius.circular(4)), child: Text(m['title'].toString(), maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: TextStyle(fontSize: 8, color: Colors.white)));
+              }).toList());
             },
           ),
         )),
