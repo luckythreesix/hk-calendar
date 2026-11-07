@@ -52,6 +52,9 @@ jobs:
           t = p.read_text()
           t = t.replace('compileSdk = flutter.compileSdkVersion', 'compileSdk = 36')
           t = t.replace('compileSdk = 35', 'compileSdk = 36')
+                    t = re.sub(r'minSdk\s*=\s*flutter\.minSdkVersion', 'minSdk = 24', t)
+          t = re.sub(r'minSdk\s*=\s*\d+', 'minSdk = 24', t)
+          t = t.replace('minSdkVersion 21', 'minSdkVersion 24')
           if 'ndkVersion' not in t:
               t = re.sub(r'(compileSdk\s*=\s*36)', r'\1\n        ndkVersion = "27.0.12077973"', t, count=1)
           if 'isCoreLibraryDesugaringEnabled' not in t:
