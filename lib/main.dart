@@ -699,8 +699,38 @@ class _State extends State<CalendarPro> {
 
   void addCountDialog() {
     var titleC = TextEditingController(); var dateC = TextEditingController(text: DateFormat('yyyy-MM-dd').format(DateTime.now().add(Duration(days: 30))));
-    showDialog(context: context, builder: (_) => AlertDialog(title: Text('新增倒數'), content: Column(mainAxisSize: MainAxisSize.min, children: [TextField(controller: titleC, decoration: InputDecoration(labelText: '事件')), TextField(controller: dateC, decoration: InputDecoration(labelText: '日期 yyyy-mm-dd'))]), actions: [TextButton(onPressed: () { counts.add({'title': titleC.text, 'date': dateC.text}); save(); setState(() {}); Navigator.pop(context); }, child: Text('加入'))]));
-  }
-}TextButton(onPressed: () { counts.add({'title': titleC.text, 'date': dateC.text}); save(); setState(() {}); Navigator.pop(context); }, child: Text('加入'))]));
+          showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text('新增倒數'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: titleC,
+              decoration: InputDecoration(labelText: '事件'),
+            ),
+            TextField(
+              controller: dateC,
+              decoration: InputDecoration(labelText: '日期 yyyy-mm-dd'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              counts.add({
+                'title': titleC.text,
+                'date': dateC.text,
+              });
+              save();
+              setState(() {});
+              Navigator.pop(context);
+            },
+            child: Text('加入'),
+          ),
+        ],
+      ),
+    );
   }
 }
