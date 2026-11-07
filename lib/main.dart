@@ -8,14 +8,40 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+// ============ 女聲選擇 - 優先搵女聲 ============
+Future<void> setFemaleCantoneseVoice(FlutterTts tts) async {
+  await tts.setLanguage("yue-Hant-HK");
+  await tts.setSpeechRate(0.48); // 慢啲：0.48，原本 0.92 太快
+  await tts.setPitch(1.25); // 偏女聲
+  await tts.setVolume(1.0);
+  try {
+    var voices = await tts.getVoices;
+    Map? femaleVoice;
+    Map? cantoneseVoice;
+    for (var v in voices) {
+      String name = v['name'].toString().toLowerCase();
+      String locale = v['locale'].toString().toLowerCase();
+      bool isCantonese = locale.contains('yue') || locale.contains('zh-hk') || locale.contains('zh_hk') || name.contains('yue') || name.contains('cantonese') || name.contains('hk');
+      if (!isCantonese) continue;
+      cantoneseVoice ??= v;
+      // 女聲關鍵字：female / woman / sin-ji / 欣 / 女
+      if (name.contains('female') || name.contains('woman') || name.contains('sin-ji') || name.contains('sinji') || name.contains('f1') || name.contains('voice 1') || name.contains('欣') || name.contains('女')) {
+        femaleVoice = v;
+        break;
+      }
+    }
+    var picked = femaleVoice ?? cantoneseVoice;
+    if (picked != null) {
+      await tts.setVoice({"name": picked['name'], "locale": picked['locale']});
+    }
+  } catch (e) {}
+}
+
 // ============ 熄屏播報 - 系統叫醒時會跑呢個 ============
 @pragma('vm:entry-point')
 Future<void> backgroundSpeak() async {
   final tts = FlutterTts();
-  await tts.setLanguage("yue-Hant-HK");
-  await tts.setSpeechRate(0.92);
-  await tts.setPitch(1.25);
-  await tts.setVolume(1.0);
+  await setFemaleCantoneseVoice(tts);
   await tts.awaitSpeakCompletion(true);
 
   var sp = await SharedPreferences.getInstance();
@@ -85,20 +111,7 @@ class _State extends State<CalendarPro> {
   }
 
   Future<void> setupTts() async {
-    await tts.setLanguage("yue-Hant-HK");
-    await tts.setSpeechRate(0.92);
-    await tts.setPitch(1.25);
-    await tts.setVolume(1.0);
-    try {
-      var voices = await tts.getVoices;
-      for (var v in voices) {
-        String name = v['name'].toString().toLowerCase();
-        if (name.contains('yue') || name.contains('cantonese') || name.contains('hk')) {
-          await tts.setVoice({"name": v['name'], "locale": v['locale']});
-          break;
-        }
-      }
-    } catch (e) {}
+    await setFemaleCantoneseVoice(tts);
   }
 
   void initNoti() async {
@@ -205,25 +218,49 @@ class _State extends State<CalendarPro> {
         BottomNavigationBarItem(icon: Icon(Icons.hourglass_bottom), label: '倒數'),
       ]),
       floatingActionButton: _tab == 0 ? FloatingActionButton(onPressed: addEvent, child: Icon(Icons.add), backgroundColor: Color(0xFF2A7CFF)) : null,
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 
   Widget buildCal() {
     return Column(children: [
-      Container(margin: EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
+      Container(margin: EdgeInsets.all(12), padding: EdgeInsets.symmetric(horizontal: 6, vertical: 6), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
         child: TableCalendar(firstDay: DateTime(2020), lastDay: DateTime(2030), focusedDay: _focused,
           selectedDayPredicate: (d) => isSameDay(_selected, d),
           onDaySelected: (s, f) { setState(() { _selected = s; _focused = f; }); },
           eventLoader: (d) => events[keyOf(d)] ?? [],
-          calendarStyle: CalendarStyle(markerDecoration: BoxDecoration(color: Color(0xFF2A7CFF), shape: BoxShape.circle)),
-          headerStyle: HeaderStyle(formatButtonVisible: false, titleCentered: true),
+          // 修復1：星期頭唔再被切
+          daysOfWeekHeight: 20,
+          daysOfWeekStyle: DaysOfWeekStyle(
+            weekdayStyle: TextStyle(fontSize: 12, color: Colors.grey),
+            weekendStyle: TextStyle(fontSize: 12, color: Colors.grey),
+          ),
+          calendarStyle: CalendarStyle(
+            markerDecoration: BoxDecoration(color: Color(0xFF2A7CFF), shape: BoxShape.circle),
+            cellMargin: EdgeInsets.all(2),
+            cellPadding: EdgeInsets.zero,
+          ),
+          headerStyle: HeaderStyle(formatButtonVisible: false, titleCentered: true, titleTextStyle: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         )),
       Container(margin: EdgeInsets.symmetric(horizontal: 12), width: double.infinity,
         child: ElevatedButton.icon(onPressed: speakDaily, icon: Icon(Icons.volume_up), label: Text("🔊 女聲講出今日行事"), style: ElevatedButton.styleFrom(backgroundColor: Color(0xFF2A7CFF), padding: EdgeInsets.all(14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))))),
       SizedBox(height: 8),
       Padding(padding: EdgeInsets.symmetric(horizontal: 12), child: Row(children: [Icon(Icons.wb_sunny, size: 14, color: Colors.orange), SizedBox(width: 4), Text(autoSpeak ? '熄屏自動講：每日 ${autoTime.hour}:${autoTime.minute.toString().padLeft(2, '0')}' : '自動講已關閉', style: TextStyle(fontSize: 12, color: Colors.grey))])),
       Expanded(child: Container(margin: EdgeInsets.all(12), padding: EdgeInsets.all(16), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
-        child: ListView(children: (events[keyOf(_selected)] ?? []).map<Widget>((e) => ListTile(leading: Container(width: 10, height: 10, decoration: BoxDecoration(color: Color(0xFF2A7CFF), shape: BoxShape.circle)), title: Text(e['title']), subtitle: Text(e['time']), trailing: IconButton(icon: Icon(Icons.close, size: 16), onPressed: () { setState(() => events[keyOf(_selected)]!.remove(e)); save(); }))).toList()))),
+        // 修復2：底部留 90 空位俾 + 掣，唔好遮住 X 同時間
+        child: ListView(padding: EdgeInsets.only(bottom: 90), children: (events[keyOf(_selected)] ?? []).map<Widget>((e) => ListTile(
+          contentPadding: EdgeInsets.symmetric(horizontal: 4),
+          leading: Container(width: 10, height: 10, decoration: BoxDecoration(color: Color(0xFF2A7CFF), shape: BoxShape.circle)),
+          title: Text(e['title'], maxLines: 1, overflow: TextOverflow.ellipsis),
+          subtitle: Text(e['time']),
+          trailing: SizedBox(
+            width: 90,
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Text(e['time'], style: TextStyle(fontSize: 13, color: Colors.black87)),
+              IconButton(icon: Icon(Icons.close, size: 18), padding: EdgeInsets.zero, constraints: BoxConstraints(), onPressed: () { setState(() => events[keyOf(_selected)]!.remove(e)); save(); }),
+            ]),
+          ),
+        )).toList()))),
     ]);
   }
 
