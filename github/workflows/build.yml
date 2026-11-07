@@ -19,6 +19,27 @@ jobs:
           channel: 'stable'
           cache: true
       - run: flutter pub get
+            - run: |
+          python3 << 'PY'
+          import pathlib
+          p = pathlib.Path('android/app/src/main/AndroidManifest.xml')
+          t = p.read_text()
+          perms = [
+              '<uses-permission android:name="android.permission.INTERNET" />',
+              '<uses-permission android:name="android.permission.RECORD_AUDIO" />',
+              '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />',
+              '<uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />',
+              '<uses-permission android:name="android.permission.USE_EXACT_ALARM" />',
+              '<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />',
+              '<uses-permission android:name="android.permission.WAKE_LOCK" />',
+              '<uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />',
+          ]
+          for perm in perms:
+              if perm not in t:
+                  t = t.replace('<application', perm + '\n    <application', 1)
+          p.write_text(t)
+          print(p.read_text())
+          PY
       - run: flutter build apk --release
       - uses: actions/upload-artifact@v4
         with:
