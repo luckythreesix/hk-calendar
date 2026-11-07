@@ -1,17 +1,24 @@
-name: Build APK
-on: [push]
+name: build
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.22.0'
-      - run: flutter create . --project-name hk_calendar --org com.hk.calendar
-      - run: |
-          cp pubspec.yaml pubspec.yaml.bak
-          flutter pub get
+          flutter-version: '3.24.0'
+          channel: 'stable'
+          cache: true
+      - run: flutter pub get
       - run: flutter build apk --release
       - uses: actions/upload-artifact@v4
         with:
