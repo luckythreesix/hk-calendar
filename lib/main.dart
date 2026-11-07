@@ -7,10 +7,12 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:speech_to_text/speech_to_text.dart';
+import 'package:quick_actions/quick_actions.dart';
 
-Future<void> setVoice(FlutterTts t) async {
+Future<void> setVoice(FlutterTts t, double rate) async {
   await t.setLanguage("yue-Hant-HK");
-  await t.setSpeechRate(0.48);
+  await t.setSpeechRate(rate);
   await t.setPitch(1.5);
   await t.setVolume(1.0);
   try {
@@ -30,12 +32,11 @@ Future<void> setVoice(FlutterTts t) async {
 @pragma('vm:entry-point')
 Future<void> backgroundSpeak() async {
   final tts = FlutterTts();
-  await setVoice(tts);
+  await setVoice(tts, 0.48);
   await tts.awaitSpeakCompletion(true);
   var sp = await SharedPreferences.getInstance();
   var events = jsonDecode(sp.getString('ev') ?? '{}');
   var todos = jsonDecode(sp.getString('todo') ?? '[]') as List;
-  var counts = jsonDecode(sp.getString('count') ?? '[]') as List;
   String today = DateFormat('yyyy-MM-dd').format(DateTime.now());
   var list = events[today] ?? [];
   String text = "朝早好，今日係 ${DateFormat('M月d日').format(DateTime.now())}。";
@@ -69,16 +70,40 @@ class _State extends State<CalendarPro> {
   List counts = [];
   bool autoSpeak = true;
   TimeOfDay autoTime = TimeOfDay(hour: 8, minute: 0);
+  double speechRate = 0.48;
   final FlutterTts tts = FlutterTts();
   final FlutterLocalNotificationsPlugin noti = FlutterLocalNotificationsPlugin();
+  final SpeechToText _speech = SpeechToText();
+  bool _listening = false;
+  String _voiceText = "";
+  final QuickActions _quickActions = QuickActions();
 
   @override
-  void initState() { super.initState(); load(); initNoti(); setVoice(tts); Future.delayed(Duration(seconds: 1), checkMorning); }
+  void initState() {
+    super.initState();
+    load(); initNoti(); setVoice(tts, speechRate);
+    Future.delayed(Duration(seconds: 1), checkMorning);
+    _quickActions.initialize((type) {
+      if (type == 'voice_add') {
+        Future.delayed(Duration(milliseconds: 600), () => startVoiceInput());
+      } else if (type == 'speak_today') {
+        Future.delayed(Duration(milliseconds: 600), () => speakDate(DateTime.now(), "今日"));
+      } else if (type == 'speak_three_days') {
+        Future.delayed(Duration(milliseconds: 600), () => speakThreeDays());
+      }
+    });
+    _quickActions.setShortcutItems([
+      ShortcutItem(type: 'voice_add', localizedTitle: '🎤 講嘢入行程', icon: 'mic'),
+      ShortcutItem(type: 'speak_today', localizedTitle: '🔊 講今日行程', icon: 'volume_up'),
+      ShortcutItem(type: 'speak_three_days', localizedTitle: '🔊 講三日行程', icon: 'volume_up'),
+    ]);
+  }
+
   Future<void> initNoti() async {
     const a = AndroidInitializationSettings('@mipmap/ic_launcher');
     await noti.initialize(InitializationSettings(android: a), onDidReceiveNotificationResponse: (r) => speakDaily());
   }
-  Future<void> reqPerm() async { await Permission.notification.request(); await Permission.scheduleExactAlarm.request(); await Permission.ignoreBatteryOptimizations.request(); }
+  Future<void> reqPerm() async { await Permission.notification.request(); await Permission.scheduleExactAlarm.request(); await Permission.ignoreBatteryOptimizations.request(); await Permission.microphone.request(); }
   Future<void> scheduleSpeak() async {
     if (!autoSpeak) return;
     await reqPerm();
@@ -97,82 +122,20 @@ class _State extends State<CalendarPro> {
       todos = jsonDecode(sp.getString('todo') ?? '[]');
       counts = jsonDecode(sp.getString('count') ?? '[]');
       autoSpeak = sp.getBool('autoSpeak') ?? true;
+      speechRate = sp.getDouble('speechRate') ?? 0.48;
+      int h = sp.getInt('autoHour') ?? 8;
+      int m = sp.getInt('autoMin') ?? 0;
+      autoTime = TimeOfDay(hour: h, minute: m);
     });
+    setVoice(tts, speechRate);
     scheduleSpeak();
   }
-  save() async { var sp = await SharedPreferences.getInstance(); sp.setString('ev', jsonEncode(events)); sp.setString('todo', jsonEncode(todos)); sp.setString('count', jsonEncode(counts)); sp.setBool('autoSpeak', autoSpeak); }
+  save() async { var sp = await SharedPreferences.getInstance(); sp.setString('ev', jsonEncode(events)); sp.setString('todo', jsonEncode(todos)); sp.setString('count', jsonEncode(counts)); sp.setBool('autoSpeak', autoSpeak); sp.setDouble('speechRate', speechRate); sp.setInt('autoHour', autoTime.hour); sp.setInt('autoMin', autoTime.minute); }
   String keyOf(DateTime d) => DateFormat('yyyy-MM-dd').format(d);
 
-  Future<void> speakDaily() async {
-    await setVoice(tts);
-    var list = events[keyOf(DateTime.now())] ?? [];
-    var todoList = todos.where((t) => !t['done']).toList();
-    String text = "朝早好，今日係 ${DateFormat('M月d日').format(DateTime.now())}。";
-    if (list.isEmpty) { text += "今日暫時冇安排。"; } else {
-      text += "你今日有 ${list.length} 個行程。";
-      for (var e in list) { text += "${e['time'].toString().replaceAll(':', '點')}，${e['title']}。"; }
-    }
-    if (todoList.isNotEmpty) text += "待辦仲有 ${todoList.length} 樣未做。";
-    text += "祝你今日順利！";
-    await tts.speak(text);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Color(0xFFF5F5F7),
-      appBar: AppBar(title: Text(['行事曆', '待辦', '倒數日'][_tab]), backgroundColor: Colors.white, foregroundColor: Colors.black, elevation: 0,
-        actions: [
-          IconButton(icon: Icon(autoSpeak ? Icons.volume_up : Icons.volume_off, color: autoSpeak ? Color(0xFF2A7CFF) : Colors.grey), onPressed: () { setState(() => autoSpeak = !autoSpeak); save(); if (autoSpeak) scheduleSpeak(); }),
-          IconButton(icon: Icon(Icons.access_time), onPressed: () async { var t = await showTimePicker(context: context, initialTime: autoTime); if (t != null) { setState(() => autoTime = t); save(); scheduleSpeak(); } }),
-        ]),
-      body: _tab == 0 ? buildCal() : _tab == 1 ? buildTodo() : buildCount(),
-      bottomNavigationBar: BottomNavigationBar(currentIndex: _tab, onTap: (i) => setState(() => _tab = i), selectedItemColor: Color(0xFF2A7CFF), items: [
-        BottomNavigationBarItem(icon: Icon(Icons.calendar_month), label: '行事曆'),
-        BottomNavigationBarItem(icon: Icon(Icons.check_circle), label: '待辦'),
-        BottomNavigationBarItem(icon: Icon(Icons.hourglass_bottom), label: '倒數'),
-      ]),
-      floatingActionButton: _tab == 0 ? FloatingActionButton(onPressed: addEvent, child: Icon(Icons.add), backgroundColor: Color(0xFF2A7CFF)) : null,
-    );
-  }
-
-  Widget buildCal() {
-    var list = events[keyOf(_selected)] ?? [];
-    return Column(children: [
-      Container(margin: EdgeInsets.all(12), padding: EdgeInsets.all(6), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
-        child: TableCalendar(firstDay: DateTime(2020), lastDay: DateTime(2030), focusedDay: _focused,
-          selectedDayPredicate: (d) => isSameDay(_selected, d),
-          onDaySelected: (s, f) { setState(() { _selected = s; _focused = f; }); },
-          eventLoader: (d) => events[keyOf(d)] ?? [],
-          daysOfWeekHeight: 20,
-          daysOfWeekStyle: DaysOfWeekStyle(weekdayStyle: TextStyle(fontSize: 12, color: Colors.grey), weekendStyle: TextStyle(fontSize: 12, color: Colors.grey)),
-          calendarStyle: CalendarStyle(cellMargin: EdgeInsets.all(2), cellPadding: EdgeInsets.zero),
-          headerStyle: HeaderStyle(formatButtonVisible: false, titleCentered: true),
-          calendarBuilders: CalendarBuilders(
-            markerBuilder: (context, day, evs) {
-              if (evs.isEmpty) return SizedBox.shrink();
-              return Column(children: evs.take(2).map((e) {
-                final m = e as Map;
-                return Container(width: double.infinity, margin: EdgeInsets.only(top: 1), padding: EdgeInsets.symmetric(horizontal: 2, vertical: 1), decoration: BoxDecoration(color: Color(0xFF2A7CFF), borderRadius: BorderRadius.circular(4)), child: Text(m['title'].toString(), maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: TextStyle(fontSize: 8, color: Colors.white)));
-              }).toList());
-            },
-          ),
-        )),
-      Container(margin: EdgeInsets.symmetric(horizontal: 12), width: double.infinity, child: ElevatedButton.icon(onPressed: speakDaily, icon: Icon(Icons.volume_up), label: Text("🔊 女聲講出今日行事"), style: ElevatedButton.styleFrom(backgroundColor: Color(0xFF2A7CFF), padding: EdgeInsets.all(14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))))),
-      SizedBox(height: 8),
-      Expanded(child: Container(margin: EdgeInsets.all(12), padding: EdgeInsets.all(16), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
-        child: list.isEmpty
-          ? InkWell(onTap: addEvent, child: Center(child: Text('撳呢度新增行程', style: TextStyle(color: Colors.grey))))
-          : ListView(padding: EdgeInsets.only(bottom: 90), children: list.asMap().entries.map((en) {
-              var e = en.value;
-              return InkWell(onTap: () => editEvent(en.key, e), child: ListTile(leading: Container(width: 10, height: 10, decoration: BoxDecoration(color: Color(0xFF2A7CFF), shape: BoxShape.circle)), title: Text(e['title'].toString()), subtitle: Text('撳呢度可以修改 • ${e['time']}'), trailing: Row(mainAxisSize: MainAxisSize.min, children: [Text(e['time'].toString()), IconButton(icon: Icon(Icons.close, size: 18), onPressed: () { setState(() => events[keyOf(_selected)]!.remove(e)); save(); })])));
-            }).toList()))),
-    ]);
-  }
-
-  Widget buildTodo() {
-    return ListView(padding: EdgeInsets.all(12), children: [
-      TextField(onSubmitted: (v) { setState(() => todos.add({'text': v, 'done': false})); save(); }, decoration: InputDecoration(hintText: '輸入待辦', filled: true, fillColor: Colors.white, border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none))),
+  void showSettings() {
+    showDialog(context: context, builder: (ctx) {
+      return StatefulBuilder(builder: (ctx, setD)xt: '輸入待辦', filled: true, fillColor: Colors.white, border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none))),
       SizedBox(height: 12),
       ...todos.asMap().entries.map((en) => Container(margin: EdgeInsets.only(bottom: 8), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)), child: CheckboxListTile(value: en.value['done'], title: Text(en.value['text']), onChanged: (v) { setState(() => todos[en.key]['done'] = v); save(); }, secondary: IconButton(icon: Icon(Icons.delete_outline), onPressed: () { setState(() => todos.removeAt(en.key)); save(); })))).toList()
     ]);
