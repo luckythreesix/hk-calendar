@@ -23,9 +23,14 @@ Future<void> setVoice(FlutterTts t, double rate) async {
       String l = v['locale'].toString().toLowerCase();
       if (!l.contains('yue') && !l.contains('zh-hk') && !n.contains('cantonese')) continue;
       pick ??= v;
-      if (n.contains('female') || n.contains('woman') || n.contains('sin-ji') || n.contains('欣')) { pick = v; break; }
+      if (n.contains('female') || n.contains('woman') || n.contains('sin-ji') || n.contains('欣')) {
+        pick = v;
+        break;
+      }
     }
-    if (pick != null) await t.setVoice({"name": pick['name'], "locale": pick['locale']});
+    if (pick != null) {
+      await t.setVoice({"name": pick['name'], "locale": pick['locale']});
+    }
   } catch (e) {}
 }
 
@@ -40,9 +45,13 @@ Future<void> backgroundSpeak() async {
   String today = DateFormat('yyyy-MM-dd').format(DateTime.now());
   var list = events[today] ?? [];
   String text = "朝早好，今日係 ${DateFormat('M月d日').format(DateTime.now())}。";
-  if (list.isEmpty) { text += "今日暫時冇行程。"; } else {
+  if (list.isEmpty) {
+    text += "今日暫時冇行程。";
+  } else {
     text += "你今日有 ${list.length} 個行程。";
-    for (var e in list) { text += "${e['time'].toString().replaceAll(':', '點')}，${e['title']}。"; }
+    for (var e in list) {
+      text += "${e['time'].toString().replaceAll(':', '點')}，${e['title']}。";
+    }
   }
   var left = todos.where((t) => t['done'] == false).toList();
   if (left.isNotEmpty) text += "待辦仲有 ${left.length} 樣。";
@@ -81,7 +90,9 @@ class _State extends State<CalendarPro> {
   @override
   void initState() {
     super.initState();
-    load(); initNoti(); setVoice(tts, speechRate);
+    load();
+    initNoti();
+    setVoice(tts, speechRate);
     Future.delayed(Duration(seconds: 1), checkMorning);
     _quickActions.initialize((type) {
       if (type == 'voice_add') {
@@ -101,20 +112,36 @@ class _State extends State<CalendarPro> {
 
   Future<void> initNoti() async {
     const a = AndroidInitializationSettings('@mipmap/ic_launcher');
-    await noti.initialize(InitializationSettings(android: a), onDidReceiveNotificationResponse: (r) => speakDaily());
+    await noti.initialize(
+      InitializationSettings(android: a),
+      onDidReceiveNotificationResponse: (r) => speakDaily(),
+    );
   }
-  Future<void> reqPerm() async { await Permission.notification.request(); await Permission.scheduleExactAlarm.request(); await Permission.ignoreBatteryOptimizations.request(); await Permission.microphone.request(); }
+
+  Future<void> reqPerm() async {
+    await Permission.notification.request();
+    await Permission.scheduleExactAlarm.request();
+    await Permission.ignoreBatteryOptimizations.request();
+    await Permission.microphone.request();
+  }
+
   Future<void> scheduleSpeak() async {
     if (!autoSpeak) return;
     await reqPerm();
-    await AndroidAlarmManager.cancel(999); await AndroidAlarmManager.cancel(1000);
+    await AndroidAlarmManager.cancel(999);
+    await AndroidAlarmManager.cancel(1000);
     DateTime now = DateTime.now();
     DateTime target = DateTime(now.year, now.month, now.day, autoTime.hour, autoTime.minute);
     if (target.isBefore(now)) target = target.add(Duration(days: 1));
     await AndroidAlarmManager.oneShotAt(target, 999, backgroundSpeak, exact: true, wakeup: true, rescheduleOnReboot: true);
     await AndroidAlarmManager.periodic(Duration(days: 1), 1000, backgroundSpeak, startAt: target, exact: true, wakeup: true, rescheduleOnReboot: true);
   }
-  void checkMorning() { var n = DateTime.now(); if (autoSpeak && n.hour >= 7 && n.hour <= 10) speakDaily(); }
+
+  void checkMorning() {
+    var n = DateTime.now();
+    if (autoSpeak && n.hour >= 7 && n.hour <= 10) speakDaily();
+  }
+
   load() async {
     var sp = await SharedPreferences.getInstance();
     setState(() {
@@ -130,38 +157,148 @@ class _State extends State<CalendarPro> {
     setVoice(tts, speechRate);
     scheduleSpeak();
   }
-  save() async { var sp = await SharedPreferences.getInstance(); sp.setString('ev', jsonEncode(events)); sp.setString('todo', jsonEncode(todos)); sp.setString('count', jsonEncode(counts)); sp.setBool('autoSpeak', autoSpeak); sp.setDouble('speechRate', speechRate); sp.setInt('autoHour', autoTime.hour); sp.setInt('autoMin', autoTime.minute); }
+
+  save() async {
+    var sp = await SharedPreferences.getInstance();
+    sp.setString('ev', jsonEncode(events));
+    sp.setString('todo', jsonEncode(todos));
+    sp.setString('count', jsonEncode(counts));
+    sp.setBool('autoSpeak', autoSpeak);
+    sp.setDouble('speechRate', speechRate);
+    sp.setInt('autoHour', autoTime.hour);
+    sp.setInt('autoMin', autoTime.minute);
+  }
+
   String keyOf(DateTime d) => DateFormat('yyyy-MM-dd').format(d);
 
   void showSettings() {
-    showDialog(context: context, builder: (ctx) {
-      return StatefulBuilder(builder: (ctx, setD) {
-        return AlertDialog(
-          title: Text('⚙️ 設定'),
-          content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            SwitchListTile(title: Text('朝早自動講行程'), subtitle: Text(autoSpeak ? '開咗' : '熄咗'), value: autoSpeak, onChanged: (v) { setState(() => autoSpeak = v); setD(() {}); save(); if (autoSpeak) scheduleSpeak(); }),
-            ListTile(title: Text('自動講嘢時間'), subtitle: Text('${autoTime.hour.toString().padLeft(2, '0')}:${autoTime.minute.toString().padLeft(2, '0')}'), trailing: Icon(Icons.access_time), onTap: () async { var t = await showTimePicker(context: context, initialTime: autoTime); if (t != null) { setState(() => autoTime = t); setD(() {}); save(); scheduleSpeak(); } }),
-            SizedBox(height: 8),
-            Text('講嘢速度：${speechRate.toStringAsFixed(2)}  ${speechRate < 0.4 ? '(慢)' : speechRate > 0.6 ? '(快)' : '(正常)'}', style: TextStyle(fontWeight: FontWeight.bold)),
-            Slider(value: speechRate, min: 0.3, max: 0.8, divisions: 10, label: speechRate.toStringAsFixed(2), onChanged: (v) { setState(() => speechRate = v); setD(() {}); }, onChangeEnd: (v) { save(); setVoice(tts, speechRate); tts.speak('呢個速度啱唔啱？'); }),
-            SizedBox(height: 8),
-            Divider(),
-            ListTile(leading: Icon(Icons.volume_up, color: Color(0xFF2A7CFF)), title: Text('講今日行程'), onTap: () { Navigator.pop(ctx); speakDate(DateTime.now(), "今日"); }),
-            ListTile(leading: Icon(Icons.date_range, color: Color(0xFF5B5BD6)), title: Text('講三日行程'), onTap: () { Navigator.pop(ctx); speakThreeDays(); }),
-            ListTile(leading: Icon(Icons.stop_circle, color: Colors.red), title: Text('停止講嘢'), onTap: () { tts.stop(); Navigator.pop(ctx); }),
-            Divider(),
-            ListTile(leading: Icon(Icons.delete_forever, color: Colors.red), title: Text('刪除全部行程', style: TextStyle(color: Colors.red)), onTap: () async {
-              Navigator.pop(ctx);
-              bool? ok = await showDialog(context: context, builder: (_) => AlertDialog(title: Text('真係刪除晒？'), content: Text('所有行程會冇晒，唔可以返轉頭。'), actions: [TextButton(onPressed: () => Navigator.pop(context, false), child: Text('取消')), TextButton(onPressed: () => Navigator.pop(context, true), child: Text('刪除', style: TextStyle(color: Colors.red)))]));
-              if (ok == true) { setState(() => events.clear()); save(); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('已刪除全部行程'))); }
-            }),
-            SizedBox(height: 8),
-            Center(child: Text('行事曆 v1.0\n長撳桌面 icon 可以直接講嘢入行程', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: Colors.grey))),
-          ])),
-          actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: Text('完成'))],
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setD) {
+            return AlertDialog(
+              title: Text('⚙️ 設定'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SwitchListTile(
+                      title: Text('朝早自動講行程'),
+                      subtitle: Text(autoSpeak ? '開咗' : '熄咗'),
+                      value: autoSpeak,
+                      onChanged: (v) {
+                        setState(() => autoSpeak = v);
+                        setD(() {});
+                        save();
+                        if (autoSpeak) scheduleSpeak();
+                      },
+                    ),
+                    ListTile(
+                      title: Text('自動講嘢時間'),
+                      subtitle: Text('${autoTime.hour.toString().padLeft(2, '0')}:${autoTime.minute.toString().padLeft(2, '0')}'),
+                      trailing: Icon(Icons.access_time),
+                      onTap: () async {
+                        var t = await showTimePicker(context: context, initialTime: autoTime);
+                        if (t != null) {
+                          setState(() => autoTime = t);
+                          setD(() {});
+                          save();
+                          scheduleSpeak();
+                        }
+                      },
+                    ),
+                    SizedBox(height: 8),
+                    Text('講嘢速度：${speechRate.toStringAsFixed(2)}', style: TextStyle(fontWeight: FontWeight.bold)),
+                    Slider(
+                      value: speechRate,
+                      min: 0.3,
+                      max: 0.8,
+                      divisions: 10,
+                      label: speechRate.toStringAsFixed(2),
+                      onChanged: (v) {
+                        setState(() => speechRate = v);
+                        setD(() {});
+                      },
+                      onChangeEnd: (v) {
+                        save();
+                        setVoice(tts, speechRate);
+                        tts.speak('呢個速度啱唔啱？');
+                      },
+                    ),
+                    SizedBox(height: 8),
+                    Divider(),
+                    ListTile(
+                      leading: Icon(Icons.volume_up, color: Color(0xFF2A7CFF)),
+                      title: Text('講今日行程'),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        speakDate(DateTime.now(), "今日");
+                      },
+                    ),
+                    ListTile(
+                      leading: Icon(Icons.date_range, color: Color(0xFF5B5BD6)),
+                      title: Text('講三日行程'),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        speakThreeDays();
+                      },
+                    ),
+                    ListTile(
+                      leading: Icon(Icons.stop_circle, color: Colors.red),
+                      title: Text('停止講嘢'),
+                      onTap: () {
+                        tts.stop();
+                        Navigator.pop(ctx);
+                      },
+                    ),
+                    Divider(),
+                    ListTile(
+                      leading: Icon(Icons.delete_forever, color: Colors.red),
+                      title: Text('刪除全部行程', style: TextStyle(color: Colors.red)),
+                      onTap: () async {
+                        Navigator.pop(ctx);
+                        bool? ok = await showDialog(
+                          context: context,
+                          builder: (_) => AlertDialog(
+                            title: Text('真係刪除晒？'),
+                            content: Text('所有行程會冇晒，唔可以返轉頭。'),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, false),
+                                child: Text('取消'),
+                              ),
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, true),
+                                child: Text('刪除', style: TextStyle(color: Colors.red)),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (ok == true) {
+                          setState(() => events.clear());
+                          save();
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('已刪除全部行程')));
+                        }
+                      },
+                    ),
+                    SizedBox(height: 8),
+                    Center(child: Text('行事曆 v1.0\n長撳桌面 icon 可以直接講嘢入行程', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: Colors.grey))),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: Text('完成'),
+                ),
+              ],
+            );
+          },
         );
-      });
-    });
+      },
+    );
   }
 
   Future<void> speakDate(DateTime date, String label) async {
@@ -170,9 +307,13 @@ class _State extends State<CalendarPro> {
     var list = events[keyOf(date)] ?? [];
     String dateStr = DateFormat('M月d日').format(date);
     String text = "$label，$dateStr，";
-    if (list.isEmpty) { text += "呢日暫時冇安排。"; } else {
+    if (list.isEmpty) {
+      text += "呢日暫時冇安排。";
+    } else {
       text += "呢日有 ${list.length} 個行程。";
-      for (var e in list) { text += "${e['time'].toString().replaceAll(':', '點')}，${e['title']}。"; }
+      for (var e in list) {
+        text += "${e['time'].toString().replaceAll(':', '點')}，${e['title']}。";
+      }
     }
     text += "講完啦！";
     await tts.speak(text);
@@ -189,6 +330,106 @@ class _State extends State<CalendarPro> {
       var list = events[keyOf(d)] ?? [];
       String dateStr = DateFormat('M月d日').format(d);
       text += "${labels[i]}，$dateStr，";
+      if (list.isEmpty) {
+        text += "冇安排。";
+      } else {
+        text += "有 ${list.length} 個行程，";
+        for (var e in list) {
+          text += "${e['time'].toString().replaceAll(':', '點')}，${e['title']}。";
+        }
+      }
+    }
+    text += "講完啦！";
+    await tts.speak(text);
+  }
+
+  Future<void> speakDaily() async {
+    await speakDate(_selected, "你撳咗");
+  }
+
+  Map<String, dynamic> parseVoice(String raw) {
+    String text = raw.trim();
+    DateTime date = _selected;
+    DateTime now = DateTime.now();
+    String time = "10:00";
+    String title = text;
+    if (text.contains('後日') || text.contains('后日')) {
+      date = now.add(Duration(days: 2));
+      title = title.replaceAll('後日', '').replaceAll('后日', '');
+    } else if (text.contains('聽日') || text.contains('听日') || text.contains('明天')) {
+      date = now.add(Duration(days: 1));
+      title = title.replaceAll('聽日', '').replaceAll('听日', '').replaceAll('明天', '');
+    } else if (text.contains('大後日')) {
+      date = now.add(Duration(days: 3));
+      title = title.replaceAll('大後日', '');
+    } else if (text.contains('今日') || text.contains('今天')) {
+      date = now;
+      title = title.replaceAll('今日', '').replaceAll('今天', '');
+    }
+    var mMonth = RegExp(r'(\d{1,2})月(\d{1,2})[號日]').firstMatch(title);
+    if (mMonth != null) {
+      int mo = int.parse(mMonth.group(1)!);
+      int da = int.parse(mMonth.group(2)!);
+      date = DateTime(now.year, mo, da);
+      title = title.replaceFirst(mMonth.group(0)!, '');
+    } else {
+      var mDay = RegExp(r'(\d{1,2})[號日]').firstMatch(title);
+      if (mDay != null) {
+        int da = int.parse(mDay.group(1)!);
+        date = DateTime(now.year, now.month, da);
+        if (date.isBefore(DateTime(now.year, now.month, now.day))) {
+          date = DateTime(now.year, now.month + 1, da);
+        }
+        title = title.replaceFirst(mDay.group(0)!, '');
+      }
+    }
+    bool isPm = title.contains('下午') || title.contains('夜晚') || title.contains('晚上') || title.contains('傍晚');
+    title = title.replaceAll('下午', '').replaceAll('上午', '').replaceAll('早上', '').replaceAll('夜晚', '').replaceAll('晚上', '').replaceAll('傍晚', '').replaceAll('中午', '');
+    var mTime = RegExp(r'(\d{1,2})[點时時:：](半|(\d{1,2})[分]?)?').firstMatch(title);
+    if (mTime != null) {
+      int h = int.parse(mTime.group(1)!);
+      int min = 0;
+      if (mTime.group(2) == '半') {
+        min = 30;
+      } else if (mTime.group(3) != null) {
+        min = int.parse(mTime.group(3)!);
+      }
+      if (isPm && h < 12) h += 12;
+      time = "${h.toString().padLeft(2, '0')}:${min.toString().padLeft(2, '0')}";
+      title = title.replaceFirst(mTime.group(0)!, '');
+    }
+    title = title.replaceAll('去', '').replaceAll('要', '').replaceAll('做', '').trim();
+    if (title.isEmpty) title = "新行程";
+    return {'date': date, 'time': time, 'title': title};
+  }
+
+  Future<void> startVoiceInput() async {
+    await Permission.microphone.request();
+    bool ok = await _speech.initialize(
+      onStatus: (s) {
+        if (s == 'done' || s == 'notListening') setState(() => _listening = false);
+      },
+      onError: (e) {
+        setState(() => _listening = false);
+      },
+    );
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('開唔到咪，請去設定俾錄音權限')));
+      return;
+    }
+    setState(() {
+      _listening = true;
+      _voiceText = "聽緊...";
+    });
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setD) {
+            return AlertDialog(
+              title: Text(_listening ? '🎤 講緊嘢...' : '聽到啦！'),
+              content: Column= "${labels[i]}，$dateStr，";
       if (list.isEmpty) { text += "冇安排。"; } else {
         text += "有 ${list.length} 個行程，";
         for (var e in list) { text += "${e['time'].toString().replaceAll(':', '點')}，${e['title']}。"; }
